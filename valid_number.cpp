@@ -2,27 +2,31 @@
 #include <string>
 #include <iostream>
 #include <vector>
+#include <set>
 
 struct DFA {
+
   enum State {
+    // https://leetcode.com/problems/valid-number/discuss/321773/DFA-diagram-for-this-problem
     START = 0,
-    PRE_DIGIT_DOT,
-    POST_DIGIT_DOT,
-    DIGIT,
-    E,
-    PRE_E_SIGN,
-    POST_E_SIGN,
-    VALID_WHITESPACE,
+    STATE_1,
+    STATE_2,
+    STATE_3,
+    STATE_4,
+    STATE_5,
+    STATE_6,
+    STATE_7,
+    STATE_8,
     ERROR
   };
 
   std::map<State, std::map<char, State>> graph;
-
-  bool seenE = false;
-  bool seenDot = false;
-  bool valid = true;
-  bool seenDigit = false;
-  State state = START;
+  std::set<State> acceptingStates{
+    STATE_2,
+    STATE_4,
+    STATE_7,
+    STATE_8,
+  };
 
   void addTransition(State start, std::string chars, State end) {
     if (graph.count(start) == 0) graph[start] = {};
@@ -32,72 +36,65 @@ struct DFA {
   }
 
   DFA() {
+
     addTransition(START, " \n\t", START);
-    addTransition(START, "0123456789", DIGIT);
-    addTransition(DIGIT, ".", POST_DIGIT_DOT);
+    addTransition(START, "-+", STATE_1);
+    addTransition(START, "0123456789", STATE_2);
+    addTransition(START, ".", STATE_3);
 
-    addTransition(START, ".", PRE_DIGIT_DOT);
-    addTransition(PRE_DIGIT_DOT, "0123456789", DIGIT);
+    addTransition(STATE_1, "0123456789", STATE_2);
+    addTransition(STATE_1, ".", STATE_3);
 
-    addTransition(POST_DIGIT_DOT, "0123456789", DIGIT);
-    addTransition(POST_DIGIT_DOT, "e", E);
-    addTransition(POST_DIGIT_DOT, " \n\t", VALID_WHITESPACE);
+    addTransition(STATE_2, "0123456789", STATE_2);
+    addTransition(STATE_2, ".", STATE_4);
+    addTransition(STATE_2, "e", STATE_5);
+    addTransition(STATE_2, " \n\t", STATE_8);
 
-    addTransition(START
+    addTransition(STATE_3, "0123456789", STATE_4);
 
+    addTransition(STATE_4, "0123456789", STATE_4);
+    addTransition(STATE_4, "e", STATE_5);
+    addTransition(STATE_4, " \n\t", STATE_8);
 
-    addTransition(DOT, " \n\t", VALID_WHITESPACE);
-    addTransition(DOT, "e", E);
-    addTransition(DIGIT, "0123456789", DIGIT);
-    addTransition(DIGIT, "e", E);
-    addTransition(DIGIT, ".", DOT);
-    addTransition(DIGIT, " \n\t", VALID_WHITESPACE);
-    addTransition(VALID_WHITESPACE, " \n\t", VALID_WHITESPACE);
-    addTransition(START, "-+", SIGN);
-    addTransition(SIGN, "0123456789", DIGIT);
-    addTransition(SIGN, ".", DOT);
-    addTransition(E, "0123456789", DIGIT);
-    addTransition(E, "-+", SIGN);
-    addTransition(DOT, "0123456789", DIGIT);
+    addTransition(STATE_5, "-+", STATE_6);
+    addTransition(STATE_5, "0123456789", STATE_7);
+
+    addTransition(STATE_6, "0123456789", STATE_7);
+
+    addTransition(STATE_7, "0123456789", STATE_7);
+    addTransition(STATE_7, " \n\t", STATE_8);
+
+    addTransition(STATE_8, " \n\t", STATE_8);
   }
 
-  bool transition(char c) {
-    if ((graph[state].count(c) == 0) ||
-        (seenE && (c == 'e' || c == '.')) ||
-        (seenDot && c == '.')) {
-      valid = false;
-      return false;
-    }
-
-    if (c == 'e') {
-      if (state == DOT && !seenDigit) {
-        valid = false;
-        return false;
-      }
-      seenE = true;
-    } else if (c == '.') seenDot = true;
-
-    state = graph[state][c];
-    if (state == DIGIT) seenDigit = true;
-    return true;
+  State transition(State curState, char c) {
+    if (graph[curState].count(c) == 0) return ERROR;
+    return graph[curState][c];
   }
 
-  void terminate() {
-    if (valid) {
-      if (!seenDigit) valid = false;
-      else valid = state == DIGIT || state == VALID_WHITESPACE || state == DOT;
-    }
+  bool isAcceptingState(State state) {
+    return acceptingStates.count(state);
   }
 
-  bool isValid() {
-    return valid;
+  State getStartState() {
+    return START;
   }
 
 };
 
+bool isValid(DFA &dfa, std::string &str) {
+  DFA::State state = dfa.getStartState();
+  for (auto &c : str) {
+    state = dfa.transition(state, c);
+    if (state == DFA::ERROR) break;
+  }
+  return dfa.isAcceptingState(state);
+}
+
 int main() {
   std::vector<std::pair<std::string, bool>> input{
     {"0", true},
+      {".1.", false},
       {".", false},
       {"3.", true},
       {".3", true},
@@ -119,13 +116,9 @@ int main() {
       {"-+3", false},
       {"95a54e53", false},
   };
+  DFA dfa;
   for (auto &p : input) {
-    DFA dfa{};
-    for (auto &c : p.first) {
-      if (!dfa.transition(c)) break;
-    }
-    dfa.terminate();
-    if (dfa.isValid() != p.second) {
+    if (isValid(dfa, p.first) != p.second) {
       std::cout << p.first
         << ":\n" << "\tExpected: " << p.second
         << "\n\tGot: " << !p.second << '\n';
